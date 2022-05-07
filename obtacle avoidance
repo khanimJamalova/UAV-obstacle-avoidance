@@ -1,0 +1,49 @@
+int numberOfSummedAngles = 0;
+float segmentWidthInRad = math::radians((float)_obstacle.increment);
+float obstacleLocalN = 0.f;
+float obstacleLocalE = 0.f;
+float objectAvoidanceThrustMagnitude = 0.f;
+_ca_thrust.lowest_distance = _obstacle.max_distance;
+
+for (int i = 0; i < 72; ++i) {
+if (_obstacle.distances[i] == UINT16_MAX) {
+break; // END REACHED
+}
+
+if (_obstacle.distances[i] <= _obstacle.min_distance ||
+_obstacle.distances[i] >= _obstacle.max_distance) {
+// skip invalid element
+continue;
+}
+
+// VALID SEGMENT
+++numberOfSummedAngles;
+
+float weight = -1.f + _obstacle.max_distance / _obstacle.distances[i];
+
+if (_ca_thrust.lowest_distance > _obstacle.distances[i]) {
+_ca_thrust.lowest_distance = _obstacle.distances[i];
+}
+
+obstacleLocalE += weight * sinf(i*segmentWidthInRad);
+obstacleLocalN += weight * -cosf(i*segmentWidthInRad);
+}
+
+// filter minimum distance
+_ca_thrust.lowest_distance_filtered =
+_lpFilterObjectAvoidance.apply(_ca_thrust.lowest_distance);
+
+if (numberOfSummedAngles > 0) {
+float angleLocalNE = M_PI/2.f - atan2(obstacleLocalN, obstacleLocalE);
+float angleGlobalNE = fmod((_states.yaw + obstacleAngleLocalNE), 2*M_PI);
+// angle valid for update
+_lastAngle = obstacleAngleGlobalNE;
+}
+
+float weight = -1.f +
+_obstacle.max_distance / _ca_thrust.lowest_distance_filtered;
+
+weight = std::fmax(weight, 0.f);
+
+_resultantThrust(0) = -cosf(_lastAngle) * weight;
+_resultantThrust(1) = -sinf(_lastAngle) * weight;
